@@ -45,7 +45,7 @@ async def buscar_noticias():
                 )
                 r2.raise_for_status()
                 resultados = r2.json().get("results", [])
-            return resultados[:3]
+            return resultados[:5]
     except Exception as e:
         log.error(f"Erro noticias: {e}")
         return []
@@ -190,44 +190,46 @@ async def postar_noticias():
     except Exception as e:
         log.error(f"Erro texto: {e}")
 
-    # Gera e posta vídeo
-    roteiro = gerar_roteiro(noticias[0], preco)
-    log.info("Criando video no HeyGen...")
-    video_id = await criar_video_heygen(roteiro)
-    if not video_id:
-        return
-    log.info("Aguardando video ficar pronto...")
-    url_video = await aguardar_video(video_id)
-    if not url_video:
-        return
-    titulo = limpar_html(noticias[0].get("title", ""))
-    log.info("Enviando video pelo URL direto...")
-    try:
-        # Envia pela URL direto — sem precisar baixar
-        await bot.send_video(
-            chat_id=TELEGRAM_CHAT_ID,
-            video=url_video,
-            caption=f"🎬 <b>{titulo}</b>\n\n#Bitcoin #JoaoCripto",
-            parse_mode=ParseMode.HTML,
-            supports_streaming=True
-        )
-        log.info("Video enviado!")
-    except Exception as e:
-        log.error(f"Erro URL direto: {e} — tentando download...")
-        bytes_video = await baixar_video(url_video)
-        if not bytes_video:
-            return
+    # Gera e posta 1 video por noticia
+    for idx, noticia in enumerate(noticias):
+        titulo = limpar_html(noticia.get("title", ""))
+        log.info(f"Gerando video {idx+1}/{len(noticias)}: {titulo[:50]}...")
+        roteiro = gerar_roteiro(noticia, preco if idx == 0 else None)
+        video_id = await criar_video_heygen(roteiro)
+        if not video_id:
+            log.error(f"Falhou criar video {idx+1}")
+            continue
+        log.info(f"Aguardando video {idx+1} ficar pronto...")
+        url_video = await aguardar_video(video_id)
+        if not url_video:
+            log.error(f"Video {idx+1} nao ficou pronto")
+            continue
+        log.info(f"Enviando video {idx+1}...")
         try:
             await bot.send_video(
                 chat_id=TELEGRAM_CHAT_ID,
-                video=bytes_video,
+                video=url_video,
                 caption=f"🎬 <b>{titulo}</b>\n\n#Bitcoin #JoaoCripto",
                 parse_mode=ParseMode.HTML,
                 supports_streaming=True
             )
-            log.info("Video enviado via download!")
-        except Exception as e2:
-            log.error(f"Erro fatal video: {e2}")
+            log.info(f"Video {idx+1} enviado!")
+        except Exception as e:
+            log.error(f"Erro video {idx+1}: {e} — tentando download...")
+            bytes_video = await baixar_video(url_video)
+            if not bytes_video:
+                continue
+            try:
+                await bot.send_video(
+                    chat_id=TELEGRAM_CHAT_ID,
+                    video=bytes_video,
+                    caption=f"🎬 <b>{titulo}</b>\n\n#Bitcoin #JoaoCripto",
+                    parse_mode=ParseMode.HTML,
+                    supports_streaming=True
+                )
+                log.info(f"Video {idx+1} enviado via download!")
+            except Exception as e2:
+                log.error(f"Erro fatal video {idx+1}: {e2}")
 
 async def main():
     log.info("Joao Cripto Bot iniciando...")
