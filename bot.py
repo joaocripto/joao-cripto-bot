@@ -73,8 +73,8 @@ async def buscar_noticias_newsdata():
 async def buscar_noticias_tradingview():
     """Busca notícias do TradingView via RSS"""
     feeds = [
-        "https://www.tradingview.com/news/rss/?locale=br",
-        "https://www.tradingview.com/news/rss/?type=crypto&locale=br",
+        "https://br.cointelegraph.com/rss",
+        "https://br.cointelegraph.com/rss/tag/bitcoin",
     ]
     noticias = []
     vistos = set()
@@ -98,7 +98,7 @@ async def buscar_noticias_tradingview():
                                     "title": titulo,
                                     "link": link_m.group(1).strip() if link_m else "",
                                     "description": re.sub(r'<[^>]+>', '', desc_m.group(1))[:300] if desc_m else "",
-                                    "fonte": "TradingView"
+                                    "fonte": "CoinTelegraph"
                                 })
                     await asyncio.sleep(0.5)
                 except Exception as e:
@@ -273,8 +273,8 @@ async def main():
         scheduler.add_job(postar_noticias, "cron", hour=int(hora), minute=int(minuto), id=f"post_{horario}")
         log.info(f"Agendado para {horario}")
     scheduler.start()
-    log.info("Bot rodando!")
-    await postar_noticias()
+    log.info("Bot rodando! Aguardando horarios agendados...")
+    log.info(f"Proximos posts: 08:00, 14:00 e 20:00 (Brasilia)")
     while True:
         await asyncio.sleep(60)
 
