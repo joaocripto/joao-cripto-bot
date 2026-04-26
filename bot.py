@@ -35,7 +35,7 @@ async def buscar_noticias():
                 params={
                     "apikey": NEWSDATA_KEY,
                     "q": "bitcoin OR crypto OR cryptocurrency",
-                    "language": "pt,en",
+                   "language": "pt",
                     "category": "business,technology",
                 }
             )
