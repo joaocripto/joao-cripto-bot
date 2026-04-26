@@ -127,7 +127,7 @@ async def aguardar_video(video_id, max_tentativas=30):
 
 async def baixar_video(url_video):
     try:
-        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=300, follow_redirects=True) as client:
             r = await client.get(url_video)
             r.raise_for_status()
             return r.content
@@ -200,16 +200,34 @@ async def postar_noticias():
     url_video = await aguardar_video(video_id)
     if not url_video:
         return
-    log.info("Baixando video...")
-    bytes_video = await baixar_video(url_video)
-    if not bytes_video:
-        return
     titulo = limpar_html(noticias[0].get("title", ""))
+    log.info("Enviando video pelo URL direto...")
     try:
-        await bot.send_video(chat_id=TELEGRAM_CHAT_ID, video=bytes_video, caption=f"🎬 <b>{titulo}</b>\n\n#Bitcoin #JoaoCripto", parse_mode=ParseMode.HTML, supports_streaming=True)
+        # Envia pela URL direto — sem precisar baixar
+        await bot.send_video(
+            chat_id=TELEGRAM_CHAT_ID,
+            video=url_video,
+            caption=f"🎬 <b>{titulo}</b>\n\n#Bitcoin #JoaoCripto",
+            parse_mode=ParseMode.HTML,
+            supports_streaming=True
+        )
         log.info("Video enviado!")
     except Exception as e:
-        log.error(f"Erro video: {e}")
+        log.error(f"Erro URL direto: {e} — tentando download...")
+        bytes_video = await baixar_video(url_video)
+        if not bytes_video:
+            return
+        try:
+            await bot.send_video(
+                chat_id=TELEGRAM_CHAT_ID,
+                video=bytes_video,
+                caption=f"🎬 <b>{titulo}</b>\n\n#Bitcoin #JoaoCripto",
+                parse_mode=ParseMode.HTML,
+                supports_streaming=True
+            )
+            log.info("Video enviado via download!")
+        except Exception as e2:
+            log.error(f"Erro fatal video: {e2}")
 
 async def main():
     log.info("Joao Cripto Bot iniciando...")
