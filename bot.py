@@ -70,45 +70,47 @@ async def buscar_noticias_newsdata():
         log.error(f"Erro NewsData: {e}")
     return todas
 
-async def buscar_noticias_tradingview():
-    """Busca notícias do TradingView via RSS"""
-    feeds = [
-        "https://br.cointelegraph.com/rss",
-        "https://br.cointelegraph.com/rss/tag/bitcoin",
-    ]
+async def buscar_rss(feeds_config):
+    """Busca de feeds RSS — recebe lista de (url, fonte)"""
     noticias = []
     vistos = set()
     try:
         async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-            for feed_url in feeds:
+            for feed_url, fonte in feeds_config:
                 try:
                     r = await client.get(feed_url, headers={"User-Agent": "Mozilla/5.0"})
                     r.raise_for_status()
-                    # Parse RSS simples com regex
                     items = re.findall(r'<item>(.*?)</item>', r.text, re.DOTALL)
                     for item in items[:5]:
-                        titulo_m = re.search(r'<title><!\[CDATA\[(.*?)\]\]></title>', item)
-                        link_m   = re.search(r'<link>(.*?)</link>', item)
-                        desc_m   = re.search(r'<description><!\[CDATA\[(.*?)\]\]></description>', item)
+                        titulo_m = re.search(r'<title>(?:<![CDATA[)?(.*?)(?:]]>)?</title>', item, re.DOTALL)
+                        link_m   = re.search(r'<link>(.*?)</link>', item) or re.search(r'<guid>(.*?)</guid>', item)
+                        desc_m   = re.search(r'<description>(?:<![CDATA[)?(.*?)(?:]]>)?</description>', item, re.DOTALL)
                         if titulo_m:
-                            titulo = titulo_m.group(1).strip()
-                            if titulo and titulo not in vistos:
+                            titulo = re.sub(r'<[^>]+>', '', titulo_m.group(1)).strip()
+                            if titulo and titulo not in vistos and len(titulo) > 15:
                                 vistos.add(titulo)
-                                noticias.append({
-                                    "title": titulo,
-                                    "link": link_m.group(1).strip() if link_m else "",
-                                    "description": re.sub(r'<[^>]+>', '', desc_m.group(1))[:300] if desc_m else "",
-                                    "fonte": "CoinTelegraph"
-                                })
-                    await asyncio.sleep(0.5)
+                                desc = re.sub(r'<[^>]+>', '', desc_m.group(1) if desc_m else '')[:300].strip()
+                                noticias.append({"title": titulo, "link": link_m.group(1).strip() if link_m else "", "description": desc, "fonte": fonte})
+                    log.info(f"RSS {fonte}: ok")
+                    await asyncio.sleep(0.3)
                 except Exception as e:
-                    log.error(f"Erro feed {feed_url}: {e}")
+                    log.error(f"Erro RSS {fonte}: {e}")
     except Exception as e:
-        log.error(f"Erro TradingView: {e}")
-    return noticias[:5]
+        log.error(f"Erro geral RSS: {e}")
+    return noticias
 
+async def buscar_noticias_tradingview():
+    """Busca de múltiplos feeds RSS gratuitos em português"""
+    feeds = [
+        ("https://br.cointelegraph.com/rss", "CoinTelegraph"),
+        ("https://br.cointelegraph.com/rss/tag/bitcoin", "CoinTelegraph"),
+        ("https://br.beincrypto.com/feed/", "BeInCrypto"),
+        ("https://www.coindesk.com/arc/outboundfeeds/rss/", "CoinDesk"),
+        ("https://livecoins.com.br/feed/", "LiveCoins"),
+    ]
+    return await buscar_rss(feeds)
 async def buscar_noticias():
-    """Combina NewsData + TradingView — máximo 10 notícias"""
+    """Combina NewsData + RSS — máximo 15 notícias"""
     log.info("Buscando noticias...")
     nd, tv = await asyncio.gather(
         buscar_noticias_newsdata(),
@@ -139,7 +141,7 @@ async def buscar_noticias():
             tv_count += 1
 
     log.info(f"Total: {len(todas)} noticias ({nd_count} NewsData + {tv_count} TradingView)")
-    return todas[:10]
+    return todas[:15]
 
 async def buscar_preco_btc():
     try:
