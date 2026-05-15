@@ -4,6 +4,7 @@ import logging
 import httpx
 import re
 import random
+import html
 from datetime import datetime
 import pytz
 from telegram import Bot
@@ -106,7 +107,8 @@ async def buscar_rss(feeds_config):
                             titulo = re.sub(r'<[^>]+>', '', titulo_m.group(1)).strip()
                             if titulo and titulo not in vistos and len(titulo) > 15:
                                 vistos.add(titulo)
-                                desc = re.sub(r'<[^>]+>', '', desc_m.group(1) if desc_m else '')[:300].strip()
+                                raw_desc = desc_m.group(1) if desc_m else ''
+                                desc = html.unescape(re.sub(r'<[^>]+>', '', raw_desc))[:300].strip()
                                 noticias.append({"title": titulo, "link": link_m.group(1).strip() if link_m else "", "description": desc, "fonte": fonte})
                     log.info(f"RSS {fonte}: ok")
                     await asyncio.sleep(0.3)
@@ -167,7 +169,8 @@ async def buscar_preco_btc():
 
 def gerar_roteiro(noticia, preco=None):
     titulo = noticia.get("title", "")
-    descricao = re.sub(r'<[^>]+>', '', noticia.get("description", "") or "").strip()
+    raw = noticia.get("description", "") or ""
+    descricao = html.unescape(re.sub(r'<[^>]+>', '', raw)).strip()
     descricao = descricao[:300]
 
     abertura = random.choice(ABERTURAS)
@@ -191,6 +194,9 @@ def gerar_roteiro(noticia, preco=None):
 {CTA}""".strip()
 
 def limpar_html(texto):
+    # Primeiro converte entidades HTML pra UTF-8 real
+    texto = html.unescape(texto)
+    # Depois escapa os caracteres perigosos pra HTML
     return texto.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
 
 def montar_cabecalho(preco, total_noticias):
